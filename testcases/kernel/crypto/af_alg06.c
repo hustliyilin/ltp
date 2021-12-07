@@ -20,7 +20,7 @@
  */
 #include <linux/rtnetlink.h>
 
-static void run(void)
+static void test_with_symm_enc_algs(const char *symm_enc_algname)
 {
 	struct {
 		struct rtattr attr;
@@ -31,9 +31,16 @@ static void run(void)
 		.attr.rta_type = 1 /* CRYPTO_AUTHENC_KEYA_PARAM */,
 	};
 	int algfd;
+	char authenc_algname[64];
 
-	algfd = tst_alg_setup("aead", "authenc(hmac(sha256),cbc(aes))",
-			      NULL, 0);
+	sprintf(authenc_algname, "authenc(hmac(sha256),cbc(%s))", symm_enc_algname);
+	if (!tst_have_alg("aead", authenc_algname)) {
+		tst_res(TCONF, "kernel doesn't have aead algorithm '%s'",
+			authenc_algname);
+		return;
+	}
+
+	algfd = tst_alg_setup("aead", authenc_algname, NULL, 0);
 	tst_res(TINFO,
 		"Setting malformed authenc key. May crash buggy kernels.");
 	TEST(setsockopt(algfd, SOL_ALG, ALG_SET_KEY, &key, sizeof(key)));
@@ -46,8 +53,20 @@ static void run(void)
 		tst_res(TPASS, "didn't crash, and got EINVAL as expected");
 }
 
+/* try several different symmetric encryption algorithms */
+static const char * const symm_enc_algs[] = {
+	"aes",
+	"sm4",
+};
+
+static void do_test(unsigned int i)
+{
+	test_with_symm_enc_algs(symm_enc_algs[i]);
+}
+
 static struct tst_test test = {
-	.test_all = run,
+	.test = do_test,
+	.tcnt = ARRAY_SIZE(symm_enc_algs),
 	.tags = (const struct tst_tag[]) {
 		{"linux-git", "8f9c46934848"},
 		{}

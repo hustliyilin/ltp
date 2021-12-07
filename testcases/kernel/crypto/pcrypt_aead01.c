@@ -33,11 +33,13 @@ void setup(void)
 	tst_crypto_open(&ses);
 }
 
-void run(void)
+static void test_with_symm_enc_algs(const char *symm_enc_algs)
 {
 	int i;
+	char cpu_driver_name[128];
+	sprintf(cpu_driver_name, "pcrypt(authenc(hmac(sha256-generic),cbc(%s-generic)))", symm_enc_algs);
 	struct crypto_user_alg a = {
-		.cru_driver_name = "pcrypt(authenc(hmac(sha256-generic),cbc(aes-generic)))",
+		.cru_driver_name = cpu_driver_name,
 		.cru_type = CRYPTO_ALG_TYPE_AEAD,
 		.cru_mask = CRYPTO_ALG_TYPE_MASK,
 	};
@@ -46,7 +48,7 @@ void run(void)
 		TEST(tst_crypto_add_alg(&ses, &a));
 		if (TST_RET && TST_RET == -ENOENT) {
 			tst_brk(TCONF | TRERRNO,
-				"pcrypt, hmac, sha256, cbc or aes not supported");
+				"pcrypt, hmac, sha256, cbc or %s not supported", symm_enc_algs);
 		}
 		if (TST_RET && TST_RET != -EEXIST)
 			tst_brk(TBROK | TRERRNO, "add_alg");
@@ -70,9 +72,21 @@ void cleanup(void)
 	tst_crypto_close(&ses);
 }
 
+/* try several different symmetric encryption algorithms */
+static const char * const symm_enc_algs[] = {
+	"aes",
+	"sm4",
+};
+
+static void do_test(unsigned int i)
+{
+	test_with_symm_enc_algs(symm_enc_algs[i]);
+}
+
 static struct tst_test test = {
 	.setup = setup,
-	.test_all = run,
+	.test = do_test,
+	.tcnt = ARRAY_SIZE(symm_enc_algs),
 	.cleanup = cleanup,
 	.needs_root = 1,
 	.tags = (const struct tst_tag[]) {
